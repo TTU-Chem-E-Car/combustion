@@ -1,0 +1,314 @@
+#include <Wire.h>
+#include <Servo.h>              // Used for plunging the 
+#include <Adafruit_ADS1015.h>   // Used as dual channel differential ADCs
+#include <DRV8825.h>            // Stepper motor driver
+#define MotorRelay 5
+
+
+
+// Motor steps per revolution. Most steppers are 200 steps or 1.8 degrees/step
+#define MOTOR_STEPS 200
+// Target RPM for cruise speed
+#define RPM 120
+// Acceleration and deceleration values are always in FULL steps / s^2
+#define MOTOR_ACCEL 2000
+#define MOTOR_DECEL 1000
+// Microstepping mode. If you hardwired it to save pins, set to the same value here.
+#define MICROSTEPS 16
+
+#define DIR 8
+#define STEP 9
+#define ENABLE 13 // optional (just delete ENABLE from everywhere if not used)
+#define MODE0 10
+#define MODE1 11
+#define MODE2 12
+DRV8825 drivetrain(MOTOR_STEPS, DIR, STEP, ENABLE, MODE0, MODE1, MODE2);
+
+//Servo myservo;
+
+#define NUMTHERM 1
+// ADCs communicate over i2c (SCL and SDA)
+Adafruit_ADS1115 ads1115_1;
+#if (NUMTHERM > 2)
+Adafruit_ADS1115 ads1115_2(0x49);
+#endif 
+#if (NUMTHERM > 4)
+Adafruit_ADS1115 ads1115_3(0x4A);
+#endif
+
+int ResistanceVals[] = {10030, 10040, 9980, 10050, 9990, 10010, 10000, 10020};
+float room[] = {0, 0, 0, 0, 0, 0, 0, 0};
+float   multiplier = 0.186;
+                         
+int redPin1 = 4;
+int greenPin1 = 6;
+int bluePin1 = 7;
+int redPin2 = 8;
+int greenPin2 = 9;
+int bluePin2 = 10;
+int speakerpin = A7;
+
+//int pos = 0;
+
+//const int motorPin1  = 11;  // Pin 14 of L293
+//const int motorPin2  = 12;  // Pin 10 of L293
+//const int motorPin3  = 13; // Pin  7 of L293
+
+
+void setup(void)
+{
+  Serial.begin(250000);
+  pinMode(MotorRelay, OUTPUT);
+  //myservo.attach(2);
+  Serial.println(F("Hello Safety Team!"));
+  pinMode(motorPin1, OUTPUT);
+  pinMode(motorPin2, OUTPUT);
+  pinMode(motorPin3, OUTPUT);
+  ads1115_1.begin();
+  ads1115_1.setSPS(ADS1115_DR_860SPS);
+#if (NUMTHERM > 2)
+  ads1115_2.begin();
+  ads1115_2.setSPS(ADS1115_DR_860SPS);
+#endif
+#if (NUMTHERM > 4)
+  ads1115_3.begin();
+  ads1115_3.setSPS(ADS1115_DR_860SPS);
+#endif
+  /*  
+  //start filling
+  Serial.println("Filling Started");
+  digitalWrite(MotorRelay, LOW);
+  Serial.println("Plunge Started");
+  plunge();
+  Serial.println("Plunge Ended");
+  //begin acceleration
+  Serial.println("Begin Acceleration");
+  for (int x = 100; x < 255; x++) {
+    Run(1, x, 40);
+  }
+  
+  Serial.println("End Acceleration");
+  //stop filling
+  while(millis()<25000){
+    TakeTemp();
+    Serial.println();
+  }
+  Serial.println("Filling Ended");
+  digitalWrite(MotorRelay, HIGH);
+  TakeTemp();
+  */
+  drivetrain.begin(RPM, MICROSTEPS);
+  drivetrain.enable();
+}
+
+void loop(void) {
+  long resistance[NUMTHERM];
+  GetResistance(resistance);
+  float temps[NUMTHERM];
+  GetTemps(temps, NUMTHERM, resistance);
+  if (ShouldRun(temps, 1000)) {
+    Run(1, 255, 5);
+  } else {
+    for (int x = 100; x < 110; x = x + 2) {
+      Run(1, -x, 40);
+      Serial.println(x);
+    }
+    Run(1, 0, 10000);
+    while (true) {
+      ;
+    }
+  }
+}
+
+void GetTemps(float TempVals[], int n, long Res[]) {
+  float c1Arr[8] = { -1.377605523e-02, -0.01371274189,   -1.332394385e-02, -1.326305518e-02, -1.350268021e-02, -1.301421426e-02};
+  float c2Arr[8] = {  2.532018389e-03,  2.521505811e-03,  2.459057419e-03,  2.447190536e-03,  2.488536479e-03,  2.407772424e-03};
+  float c3Arr[8] = { -7.936009870e-06, -7.894612939e-06, -7.660449294e-06, -7.609495028e-06, -7.774309414e-06, -7.465155865e-06};
+  for (int y = 0; y < n; y++) {
+    TempVals[y] = Res[y];
+    TempVals[y] = log(TempVals[y]);
+    TempVals[y] = (1.0 / (c1Arr[y] + c2Arr[y] * TempVals[y] + c3Arr[y] * TempVals[y] * TempVals[y] * TempVals[y]));
+    TempVals[y] = TempVals[y] - 273.15;
+    TempVals[y] = (TempVals[y] * 9.0) / 5.0 + 32.0;
+  }
+}
+
+void GetResistance(long Vals[], int n) {
+  Vals[0] = ads1115_1.readADC_Differential_2_3();
+#if (NUMTHERM > 1)
+  Vals[1] = ads1115_1.readADC_Differential_0_1();
+#endif
+#if (NUMTHERM > 2)
+  Vals[2] = ads1115_2.readADC_Differential_2_3();
+#endif
+#if (NUMTHERM > 3)
+  Vals[3] = ads1115_2.readADC_Differential_0_1();
+#endif 
+#if (NUMTHERM > 4)
+  Vals[4] = ads1115_3.readADC_Differential_2_3();
+#endif
+#if (NUMTHERM > 5)
+  Vals[5] = ads1115_3.readADC_Differential_0_1();
+#endif
+  
+  for (int x = 0; x < n; x++) {
+    Vals[x] = ResistanceVals[x] * ((VCC / 2) / ((((float)Vals[x]) * multiplier) / 1000));
+  }
+}
+
+void printArr(long arr[], int n, long t) {
+  //Serial.print(t); Serial.print(" ");
+  for (int x = 0; x < n; x++) {
+    Serial.print(arr[x]); Serial.print(" ");
+  }
+  Serial.println(" ");
+}
+
+void printArr(float arr[], int n, long t) {
+  Serial.print(t); Serial.print(" ");
+  for (int x = 0; x < n; x++) {
+    Serial.print(arr[x], 4); Serial.print(" ");
+  }
+  //Serial.println(" ");
+}
+
+void Run(int motor, int velocity, int t) {
+  if (motor == 1) {
+    if (velocity > 0) {
+      digitalWrite(motorPin1, HIGH);
+      digitalWrite(motorPin2, LOW);
+      analogWrite(motorPin3, velocity);
+      delay(long(t));
+    } else if (velocity < 0) {
+      digitalWrite(motorPin1, LOW);
+      digitalWrite(motorPin2, HIGH);
+      analogWrite(motorPin3, -1 * velocity);
+      delay(long(t));
+    }
+    else {
+      digitalWrite(motorPin1, HIGH);
+      digitalWrite(motorPin2, HIGH);
+      analogWrite(motorPin3, velocity);
+      delay(long(t * 1000));
+    }
+  } else {
+    if (velocity > 0) {
+      analogWrite(motorPin1, 0);
+      analogWrite(motorPin2, velocity);
+      analogWrite(motorPin3, velocity);
+      delay(long(t * 1000));
+    } else if (velocity < 0) {
+      digitalWrite(motorPin1, HIGH);
+      digitalWrite(motorPin2, LOW);
+      analogWrite(motorPin3, velocity);
+      delay(long(t * 1000));
+    } else  {
+      digitalWrite(motorPin1, HIGH);
+      digitalWrite(motorPin2, HIGH);
+      analogWrite(motorPin3, velocity);
+      while (true) {
+        delay(long(1 * 1000));
+      }
+    }
+  }
+}
+
+boolean ShouldRun(float arr[], int n, float limit) {
+  int count = 0;
+  if (millis() < 25000) {
+    //Serial.println("Time : " + String(millis()) + " : Waiting");
+    printArr(arr,n,millis());
+    Serial.print(" : Waiting");
+    Serial.println();
+    return true;
+  } else if (room[0] == 0) {
+    for (int i = 0; i < n; i++) {
+      room[i] = arr[i];
+    }
+  } else {
+    for (int x = 0; x < n; x++) {
+      if (arr[x] > 5.5 + room[x]) {
+        count++;
+        if (count > 2) {
+          return false;
+        }
+      }
+    }
+    float off[NUMTHERM];
+    for(int c = 0; c < n;c++){
+      off[c] = arr[c] - room[c];
+    }
+    printArr(off,n,millis());
+    Serial.println();
+  }
+  return true;
+}
+
+/* // Servo functions plunge(), Forward(), Backward()
+void plunge() {
+  Serial.println("Start Plunge");
+  long t = millis();
+  Serial.println(t);
+  for (int x = 70; x < 120; x = x + 10) {
+    Forward(75, x, x + 10);
+    Backward(75, x + 10, x + 5);
+    Forward(75, x + 5, x + 10);
+  }
+  Backward(50, 125, 65);
+  Serial.println(millis() - t);
+}
+
+void Forward(int s, int st, int en) {
+  for (pos = st; pos <= en; pos += 1) { // goes from 0 degrees to 180 degrees
+    // in steps of 1 degree
+    TakeTemp();
+    Serial.println();
+    //myservo.write(pos);              // tell servo to go to position in variable 'pos'
+    delay(s - 22);                     // waits 15ms for the servo to reach the position
+  }
+}
+
+void Backward(int s, int st, int en) {
+  for (pos = st; pos >= en; pos -= 1) { // goes from 180 degrees to 0 degrees
+    TakeTemp();
+    Serial.println();
+    //myservo.write(pos);              // tell servo to go to position in variable 'pos'
+    delay(s - 22);                     // waits 15ms for the servo to reach the position
+  }
+}
+*/
+
+void setColor(int red, int green, int blue, int ledNum)
+{
+  if (ledNum == 1) {
+#ifdef COMMON_ANODE
+    red = 255 - red;
+    green = 255 - green;
+    blue = 255 - blue;
+#endif
+    analogWrite(redPin1, red);
+    analogWrite(greenPin1, green);
+    analogWrite(bluePin1, blue);
+  }
+  else {
+#ifdef COMMON_ANODE
+    red = 255 - red;
+    green = 255 - green;
+    blue = 255 - blue;
+#endif
+    analogWrite(redPin2, red);
+    analogWrite(greenPin2, green);
+    analogWrite(bluePin2, blue);
+  }
+}
+
+void TakeTemp() {
+  long t = millis();
+  //Serial.println(t);
+  long resistance[NUMTHERM];
+  GetResistance(resistance);
+  float temps[NUMTHERM];
+  GetTemps(temps, NUMTHERM, resistance);
+  printArr(temps, NUMTHERM, millis());
+  // Serial.println(millis()-t);
+}
