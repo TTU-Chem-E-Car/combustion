@@ -1,5 +1,5 @@
 #include <Wire.h>
-#include <Servo.h>              // Used for plunging the 
+//#include <Servo.h>              // Used for plunging the 
 #include <Adafruit_ADS1015.h>   // Used as dual channel differential ADCs
 #include <DRV8825.h>            // Stepper motor driver
 //#define MotorRelay 5
@@ -16,25 +16,25 @@
 // Microstepping mode. If you hardwired it to save pins, set to the same value here.
 #define MICROSTEPS 16
 
-//#define DIR 8
-#define STEP 9
-#define ENABLE 13 // optional (just delete ENABLE from everywhere if not used)
-#define SLEEP 10
-//#define MODE0 10
-//#define MODE1 11
-//#define MODE2 12
-#define RESET 11
-#define DIRA 7
-#define DIRB 6
-#define DIRC 5
-#define DIRD 4
+
+#define DIRB 13
+#define DIRD 12
+#define DIRC 11
+#define DIRA 10
+#define DIR  10
+#define STEP  9
+#define SLEEP 8
+#define RESET 7
+#define MODE2 6
+#define MODE1 5
+#define MODE0 4
 
 #define DIRADIR HIGH
 #define DIRBDIR LOW
 #define DIRCDIR LOW
 #define DIRDDIR LOW
 //DRV8825 drivetrain(MOTOR_STEPS, DIR, STEP, ENABLE, MODE0, MODE1, MODE2);
-DRV8825 drivetrain(MOTOR_STEPS, DIR, STEP, ENABLE);
+DRV8825 drivetrain(MOTOR_STEPS, DIR, STEP);
 
 //Servo myservo;
 
@@ -48,6 +48,9 @@ Adafruit_ADS1115 ads1115_2(0x49);
 #endif
 #if (NUMTHERM > 4)
 Adafruit_ADS1115 ads1115_3(0x4A);
+#endif
+#if (NUMTHERM > 6)
+Adafruit_ADS1115 ads1115_4(0x4B);
 #endif
 
 int ResistanceVals[] = {9990, 10010, 9980, 10050, 9990, 10010, 10000, 10020};
@@ -93,14 +96,18 @@ void setup(void)
   digitalWrite(DIRD,DIRDDIR);
   
   ads1115_1.begin();
-  ads1115_1.setSPS(ADS1115_DR_860SPS);
+  //ads1115_1.setSPS(ADS1115_DR_860SPS);
 #if (NUMTHERM > 2)
   ads1115_2.begin();
-  ads1115_2.setSPS(ADS1115_DR_860SPS);
+  //ads1115_2.setSPS(ADS1115_DR_860SPS);
 #endif
 #if (NUMTHERM > 4)
   ads1115_3.begin();
-  ads1115_3.setSPS(ADS1115_DR_860SPS);
+  //ads1115_3.setSPS(ADS1115_DR_860SPS);
+#endif
+#if (NUMTHERM > 6)
+  ads1115_4.begin();
+  //ads1115_4.setSPS(ADS1115_DR_860SPS);
 #endif
   /*
     //start filling
@@ -130,8 +137,8 @@ void setup(void)
 }
 
 void loop(void) {
-  long resistance[NUMTHERM];
-  GetResistance(resistance);
+  float resistance[NUMTHERM];
+  GetResistance(resistance,NUMTHERM,ResistanceVals,ADCMUL);
   float temps[NUMTHERM];
   GetTemps(temps, NUMTHERM, resistance);
   if (ShouldRun(temps, 1000)) {
@@ -166,52 +173,52 @@ void GetResistance(float *RT, int n, int R1[], int adcmul) {
 
   long VT[NUMTHERM];
 #ifdef CHANNELFLIP
-  VT[0] = ads1015.readADC_Differential_0_1()   * -1;
+  VT[0] = ads1115_1.readADC_Differential_0_1()   * -1;
 #if (NUMTHERM > 1)
-  VT[1] = ads1015.readADC_Differential_2_3()   * -1;
+  VT[1] = ads1115_1.readADC_Differential_2_3()   * -1;
 #endif
 #if (NUMTHERM > 2)
-  VT[2] = ads1015_2.readADC_Differential_2_3() * -1;
+  VT[2] = ads1115_2.readADC_Differential_2_3() * -1;
 #endif
 #if (NUMTHERM > 3)
-  VT[3] = ads1015_2.readADC_Differential_0_1() * -1;
+  VT[3] = ads1115_2.readADC_Differential_0_1() * -1;
 #endif
 #if (NUMTHERM > 4)
-  VT[4] = ads1015_3.readADC_Differential_2_3() * -1;
+  VT[4] = ads1115_3.readADC_Differential_2_3() * -1;
 #endif
 #if (NUMTHERM > 5)
-  VT[5] = ads1015_3.readADC_Differential_0_1() * -1;
+  VT[5] = ads1115_3.readADC_Differential_0_1() * -1;
 #endif
 #if (NUMTHERM > 6)
-  VT[6] = ads1015_4.readADC_Differential_0_1() * -1;
+  VT[6] = ads1115_4.readADC_Differential_0_1() * -1;
 #endif
 #if (NUMTHERM > 7)
-  VT[6] = ads1015_4.readADC_Differential_2_3() * -1;
+  VT[6] = ads1115_4.readADC_Differential_2_3() * -1;
 #endif
 
 #else   // no CHANNELFLIP
 
-  VT[0] = ads1015.readADC_Differential_0_1();
+  VT[0] = ads1115_1.readADC_Differential_0_1();
 #if (NUMTHERM > 1)
-  VT[1] = ads1015.readADC_Differential_2_3();
+  VT[1] = ads1115_1.readADC_Differential_2_3();
 #endif
 #if (NUMTHERM > 2)
-  VT[2] = ads1015_2.readADC_Differential_2_3();
+  VT[2] = ads1115_2.readADC_Differential_2_3();
 #endif
 #if (NUMTHERM > 3)
-  VT[3] = ads1015_2.readADC_Differential_0_1();
+  VT[3] = ads1115_2.readADC_Differential_0_1();
 #endif
 #if (NUMTHERM > 4)
-  VT[4] = ads1015_3.readADC_Differential_2_3();
+  VT[4] = ads1115_3.readADC_Differential_2_3();
 #endif
 #if (NUMTHERM > 5)
-  VT[5] = ads1015_3.readADC_Differential_0_1();
+  VT[5] = ads1115_3.readADC_Differential_0_1();
 #endif
 #if (NUMTHERM > 6)
-  VT[6] = ads1015_4.readADC_Differential_0_1();
+  VT[6] = ads1115_4.readADC_Differential_0_1();
 #endif
 #if (NUMTHERM > 7)
-  VT[6] = ads1015_4.readADC_Differential_2_3();
+  VT[6] = ads1115_4.readADC_Differential_2_3();
 #endif
 
 #endif // CHANNELFLIP
@@ -246,7 +253,7 @@ void printArr(float arr[], int n, long t) {
   }
   //Serial.println(" ");
 }
-
+/*
 void Run(int motor, int velocity, int t) {
   if (motor == 1) {
     if (velocity > 0) {
@@ -287,8 +294,8 @@ void Run(int motor, int velocity, int t) {
     }
   }
 }
-
-boolean ShouldRun(float arr[], int n, float limit) {
+*/
+boolean ShouldRun(float arr[], int n) { //, float limit) {
   int count = 0;
   if (millis() < 25000) {
     //Serial.println("Time : " + String(millis()) + " : Waiting");
@@ -352,7 +359,7 @@ boolean ShouldRun(float arr[], int n, float limit) {
   }
   }
 */
-
+/*
 void setColor(int red, int green, int blue, int ledNum)
 {
   if (ledNum == 1) {
@@ -376,12 +383,12 @@ void setColor(int red, int green, int blue, int ledNum)
     analogWrite(bluePin2, blue);
   }
 }
-
+*/
 void TakeTemp() {
   long t = millis();
   //Serial.println(t);
   float resistance[NUMTHERM];
-  GetResistance(resistance, n, R1, multiplier);
+  GetResistance(resistance, NUMTHERM, ResistanceVals, multiplier);
   float temps[NUMTHERM];
   GetTemps(temps, NUMTHERM, resistance);
   printArr(temps, NUMTHERM, millis());
