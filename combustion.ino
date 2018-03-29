@@ -127,7 +127,7 @@ void setup(void)
   Serial.println("End Acceleration");
   //stop filling
   */
-  while(millis()<3000){
+  while(millis()<0){
     TakeTemp();
     Serial.println();
   }
@@ -305,7 +305,7 @@ void Run(int motor, int velocity, int t) {
 
 boolean ShouldRun(float arr[], int n) { //, float limit) {
   int count = 0;
-  if (millis() < 3000) {
+  if (millis() < 0) {
     Serial.println("Time : " + String(millis()) + " : Waiting");
     printArr(arr, n, millis());
     Serial.print(" : Waiting");
