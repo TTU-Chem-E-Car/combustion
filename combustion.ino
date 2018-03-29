@@ -7,9 +7,9 @@
 
 
 // Motor steps per revolution. Most steppers are 200 steps or 1.8 degrees/step
-#define MOTOR_STEPS 200
+#define MOTOR_STEPS 3600 // we set this high for smoothing
 // Target RPM for cruise speed
-#define RPM 120
+#define RPM 1
 // Acceleration and deceleration values are always in FULL steps / s^2
 #define MOTOR_ACCEL 2000
 #define MOTOR_DECEL 1000
@@ -28,11 +28,13 @@
 #define MODE2 6
 #define MODE1 5
 #define MODE0 4
+#define ENABLE 3
 
-#define DIRADIR HIGH
+#define DIRADIR LOW
 #define DIRBDIR LOW
-#define DIRCDIR LOW
+#define DIRCDIR HIGH
 #define DIRDDIR LOW
+
 //DRV8825 drivetrain(MOTOR_STEPS, DIR, STEP, ENABLE, MODE0, MODE1, MODE2);
 DRV8825 drivetrain(MOTOR_STEPS, DIR, STEP);
 
@@ -72,7 +74,7 @@ int speakerpin = A7;
 
 void setup(void)
 {
-  Serial.begin(250000);
+  Serial.begin(115200);
   //pinMode(MotorRelay, OUTPUT);
   //myservo.attach(2);
   /*
@@ -90,10 +92,10 @@ void setup(void)
   
   digitalWrite(SLEEP,HIGH);
   digitalWrite(RESET,HIGH);
-  digitalWrite(DIRA,DIRADIR);
-  digitalWrite(DIRB,DIRBDIR);
-  digitalWrite(DIRC,DIRCDIR);
-  digitalWrite(DIRD,DIRDDIR);
+  digitalWrite(DIRA,LOW);
+  digitalWrite(DIRB,LOW);
+  digitalWrite(DIRC,HIGH); // HI
+  digitalWrite(DIRD,LOW);
   
   ads1115_1.begin();
   //ads1115_1.setSPS(ADS1115_DR_860SPS);
@@ -110,35 +112,39 @@ void setup(void)
   //ads1115_4.setSPS(ADS1115_DR_860SPS);
 #endif
   /*
-    //start filling
-    Serial.println("Filling Started");
-    digitalWrite(MotorRelay, LOW);
-    Serial.println("Plunge Started");
-    plunge();
-    Serial.println("Plunge Ended");
-    //begin acceleration
-    Serial.println("Begin Acceleration");
-    for (int x = 100; x < 255; x++) {
-    Run(1, x, 40);
-    }
+  //start filling
+  Serial.println("Filling Started");
+  digitalWrite(MotorRelay, LOW);
+  Serial.println("Plunge Started");
+  plunge();
+  Serial.println("Plunge Ended");
+  //begin acceleration
+  Serial.println("Begin Acceleration");
+  for (int x = 100; x < 255; x++) {
+  Run(1, x, 40);
+  }
 
-    Serial.println("End Acceleration");
-    //stop filling
-    */
-    while(millis()<25000){
+  Serial.println("End Acceleration");
+  //stop filling
+  */
+  while(millis()<3000){
     TakeTemp();
     Serial.println();
-    }
-    
-    Serial.println("Filling Ended");
-    //digitalWrite(MotorRelay, HIGH);
-    
-    TakeTemp();
-  drivetrain.begin(RPM, MICROSTEPS);
-  drivetrain.enable();
+  }
+  
+  Serial.println("Filling Ended");
+  //digitalWrite(MotorRelay, HIGH);
+  
+  TakeTemp();
+  
+  //drivetrain.setSpeedProfile(drivetrain.LINEAR_SPEED, MOTOR_ACCEL, MOTOR_DECEL);
+  //drivetrain.begin(RPM, MICROSTEPS);
+  //drivetrain.enable();
+  //drivetrain.startRotate(360);
 }
 
 void loop(void) {
+  unsigned wait_time = drivetrain.nextAction();
   float resistance[NUMTHERM];
   GetResistance(resistance,NUMTHERM,ResistanceVals,ADCMUL);
   float temps[NUMTHERM];
@@ -153,6 +159,7 @@ void loop(void) {
     }
     Run(1, 0, 10000);
     */
+    Serial.println( "Motor disabled");
     drivetrain.disable();
     while (true) {
       ;
@@ -195,7 +202,7 @@ void GetResistance(float *RT, int n, int R1[], int adcmul) {
   VT[6] = ads1115_4.readADC_Differential_0_1() * -1;
 #endif
 #if (NUMTHERM > 7)
-  VT[6] = ads1115_4.readADC_Differential_2_3() * -1;
+  VT[7] = ads1115_4.readADC_Differential_2_3() * -1;
 #endif
 
 #else   // no CHANNELFLIP
@@ -220,28 +227,25 @@ void GetResistance(float *RT, int n, int R1[], int adcmul) {
   VT[6] = ads1115_4.readADC_Differential_0_1();
 #endif
 #if (NUMTHERM > 7)
-  VT[6] = ads1115_4.readADC_Differential_2_3();
+  VT[7] = ads1115_4.readADC_Differential_2_3();
 #endif
 
 #endif // CHANNELFLIP
 
-  // Josiah
   // Voltage Divider
-  // Vo = Vcc + R2 / (R1 + R2)
+  // Vo = Vcc * R2 / (R1 + R2)
   // R2 = - (Vo * R1) / (Vo - Vcc)
 
   for (int x = 0; x < n; x++) {
-    // From Josiah
     float VTf = ((float)VT[x] * ADCMUL) / 1000; // 0.186 multiplier to mV, then divide by 1000mV/V
     RT[x] = ( - (VTf * R1[x]) / ( VTf - VCC )); // Where VT is the Voltage across the Thermistor
     //RT[x] = (R1[x] * ( (VCC/2) / ( ( (float)VT[x] * ADCMUL ) / 1000  ))); // to resistance
-    //RT[x] = R1[x] * ((4.92 / 2) / ((((float)VT[x]) * .186) / 1000));
-    //RT[x] = ((float)VT[x] * ADCMUL) / 1000 ;
+    //RT[x] = ((float)VT[x] * ADCMUL) / 1000 ;  // return voltage rather than resistance
   }
 }
 
 void printArr(long arr[], int n, long t) {
-  //Serial.print(t); Serial.print(" ");
+  Serial.print(t); Serial.print(" ");
   for (int x = 0; x < n; x++) {
     Serial.print(arr[x]); Serial.print(" ");
   }
@@ -253,8 +257,9 @@ void printArr(float arr[], int n, long t) {
   for (int x = 0; x < n; x++) {
     Serial.print(arr[x], 4); Serial.print(" ");
   }
-  //Serial.println(" ");
+  Serial.println(" ");
 }
+
 /*
 void Run(int motor, int velocity, int t) {
   if (motor == 1) {
@@ -297,10 +302,11 @@ void Run(int motor, int velocity, int t) {
   }
 }
 */
+
 boolean ShouldRun(float arr[], int n) { //, float limit) {
   int count = 0;
-  if (millis() < 25000) {
-    //Serial.println("Time : " + String(millis()) + " : Waiting");
+  if (millis() < 3000) {
+    Serial.println("Time : " + String(millis()) + " : Waiting");
     printArr(arr, n, millis());
     Serial.print(" : Waiting");
     Serial.println();
@@ -388,7 +394,7 @@ void setColor(int red, int green, int blue, int ledNum)
 */
 void TakeTemp() {
   long t = millis();
-  //Serial.println(t);
+  Serial.println(t);
   float resistance[NUMTHERM];
   GetResistance(resistance, NUMTHERM, ResistanceVals, multiplier);
   float temps[NUMTHERM];
