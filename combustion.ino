@@ -2,7 +2,7 @@
 #include <Servo.h>              // Used for plunging the 
 #include <Adafruit_ADS1015.h>   // Used as dual channel differential ADCs
 #include <DRV8825.h>            // Stepper motor driver
-#define MotorRelay 5
+//#define MotorRelay 5
 
 
 
@@ -16,36 +16,48 @@
 // Microstepping mode. If you hardwired it to save pins, set to the same value here.
 #define MICROSTEPS 16
 
-#define DIR 8
+//#define DIR 8
 #define STEP 9
 #define ENABLE 13 // optional (just delete ENABLE from everywhere if not used)
-#define MODE0 10
-#define MODE1 11
-#define MODE2 12
-DRV8825 drivetrain(MOTOR_STEPS, DIR, STEP, ENABLE, MODE0, MODE1, MODE2);
+#define SLEEP 10
+//#define MODE0 10
+//#define MODE1 11
+//#define MODE2 12
+#define RESET 11
+#define DIRA 7
+#define DIRB 6
+#define DIRC 5
+#define DIRD 4
+
+#define DIRADIR HIGH
+#define DIRBDIR LOW
+#define DIRCDIR LOW
+#define DIRDDIR LOW
+//DRV8825 drivetrain(MOTOR_STEPS, DIR, STEP, ENABLE, MODE0, MODE1, MODE2);
+DRV8825 drivetrain(MOTOR_STEPS, DIR, STEP, ENABLE);
 
 //Servo myservo;
 
-#define NUMTHERM 1
+#define NUMTHERM  1
+#define VCC       4.92
+#define ADCMUL    0.186
 // ADCs communicate over i2c (SCL and SDA)
 Adafruit_ADS1115 ads1115_1;
 #if (NUMTHERM > 2)
 Adafruit_ADS1115 ads1115_2(0x49);
-#endif 
+#endif
 #if (NUMTHERM > 4)
 Adafruit_ADS1115 ads1115_3(0x4A);
 #endif
 
-int ResistanceVals[] = {10030, 10040, 9980, 10050, 9990, 10010, 10000, 10020};
+int ResistanceVals[] = {9990, 10010, 9980, 10050, 9990, 10010, 10000, 10020};
+float c1Arr[] = {  0.00184847419,  1.835135071E-03};
+float c2Arr[] = {  1.172333013E-04, 1.198489835E-04};
+float c3Arr[] = {  5.161206729E-07, 5.003643336E-07};
+
 float room[] = {0, 0, 0, 0, 0, 0, 0, 0};
 float   multiplier = 0.186;
-                         
-int redPin1 = 4;
-int greenPin1 = 6;
-int bluePin1 = 7;
-int redPin2 = 8;
-int greenPin2 = 9;
-int bluePin2 = 10;
+
 int speakerpin = A7;
 
 //int pos = 0;
@@ -58,12 +70,28 @@ int speakerpin = A7;
 void setup(void)
 {
   Serial.begin(250000);
-  pinMode(MotorRelay, OUTPUT);
+  //pinMode(MotorRelay, OUTPUT);
   //myservo.attach(2);
-  Serial.println(F("Hello Safety Team!"));
-  pinMode(motorPin1, OUTPUT);
-  pinMode(motorPin2, OUTPUT);
-  pinMode(motorPin3, OUTPUT);
+  /*
+    Serial.println(F("Hello Safety Team!"));
+    pinMode(motorPin1, OUTPUT);
+    pinMode(motorPin2, OUTPUT);
+    pinMode(motorPin3, OUTPUT);
+  */
+  pinMode(SLEEP, OUTPUT);
+  pinMode(RESET, OUTPUT);
+  pinMode(DIRA, OUTPUT);
+  pinMode(DIRB, OUTPUT);
+  pinMode(DIRC, OUTPUT);
+  pinMode(DIRD, OUTPUT);
+  
+  digitalWrite(SLEEP,HIGH);
+  digitalWrite(RESET,HIGH);
+  digitalWrite(DIRA,DIRADIR);
+  digitalWrite(DIRB,DIRBDIR);
+  digitalWrite(DIRC,DIRCDIR);
+  digitalWrite(DIRD,DIRDDIR);
+  
   ads1115_1.begin();
   ads1115_1.setSPS(ADS1115_DR_860SPS);
 #if (NUMTHERM > 2)
@@ -74,28 +102,28 @@ void setup(void)
   ads1115_3.begin();
   ads1115_3.setSPS(ADS1115_DR_860SPS);
 #endif
-  /*  
-  //start filling
-  Serial.println("Filling Started");
-  digitalWrite(MotorRelay, LOW);
-  Serial.println("Plunge Started");
-  plunge();
-  Serial.println("Plunge Ended");
-  //begin acceleration
-  Serial.println("Begin Acceleration");
-  for (int x = 100; x < 255; x++) {
+  /*
+    //start filling
+    Serial.println("Filling Started");
+    digitalWrite(MotorRelay, LOW);
+    Serial.println("Plunge Started");
+    plunge();
+    Serial.println("Plunge Ended");
+    //begin acceleration
+    Serial.println("Begin Acceleration");
+    for (int x = 100; x < 255; x++) {
     Run(1, x, 40);
-  }
-  
-  Serial.println("End Acceleration");
-  //stop filling
-  while(millis()<25000){
+    }
+
+    Serial.println("End Acceleration");
+    //stop filling
+    while(millis()<25000){
     TakeTemp();
     Serial.println();
-  }
-  Serial.println("Filling Ended");
-  digitalWrite(MotorRelay, HIGH);
-  TakeTemp();
+    }
+    Serial.println("Filling Ended");
+    digitalWrite(MotorRelay, HIGH);
+    TakeTemp();
   */
   drivetrain.begin(RPM, MICROSTEPS);
   drivetrain.enable();
@@ -107,23 +135,24 @@ void loop(void) {
   float temps[NUMTHERM];
   GetTemps(temps, NUMTHERM, resistance);
   if (ShouldRun(temps, 1000)) {
-    Run(1, 255, 5);
+    //Run(1, 255, 5);
   } else {
+    /*
     for (int x = 100; x < 110; x = x + 2) {
       Run(1, -x, 40);
       Serial.println(x);
     }
     Run(1, 0, 10000);
+    */
+    drivetrain.disable();
     while (true) {
       ;
     }
   }
 }
 
-void GetTemps(float TempVals[], int n, long Res[]) {
-  float c1Arr[8] = { -1.377605523e-02, -0.01371274189,   -1.332394385e-02, -1.326305518e-02, -1.350268021e-02, -1.301421426e-02};
-  float c2Arr[8] = {  2.532018389e-03,  2.521505811e-03,  2.459057419e-03,  2.447190536e-03,  2.488536479e-03,  2.407772424e-03};
-  float c3Arr[8] = { -7.936009870e-06, -7.894612939e-06, -7.660449294e-06, -7.609495028e-06, -7.774309414e-06, -7.465155865e-06};
+void GetTemps(float *TempVals, int n, float *Res) {
+
   for (int y = 0; y < n; y++) {
     TempVals[y] = Res[y];
     TempVals[y] = log(TempVals[y]);
@@ -133,26 +162,72 @@ void GetTemps(float TempVals[], int n, long Res[]) {
   }
 }
 
-void GetResistance(long Vals[], int n) {
-  Vals[0] = ads1115_1.readADC_Differential_2_3();
+void GetResistance(float *RT, int n, int R1[], int adcmul) {
+
+  long VT[NUMTHERM];
+#ifdef CHANNELFLIP
+  VT[0] = ads1015.readADC_Differential_0_1()   * -1;
 #if (NUMTHERM > 1)
-  Vals[1] = ads1115_1.readADC_Differential_0_1();
+  VT[1] = ads1015.readADC_Differential_2_3()   * -1;
 #endif
 #if (NUMTHERM > 2)
-  Vals[2] = ads1115_2.readADC_Differential_2_3();
+  VT[2] = ads1015_2.readADC_Differential_2_3() * -1;
 #endif
 #if (NUMTHERM > 3)
-  Vals[3] = ads1115_2.readADC_Differential_0_1();
-#endif 
+  VT[3] = ads1015_2.readADC_Differential_0_1() * -1;
+#endif
 #if (NUMTHERM > 4)
-  Vals[4] = ads1115_3.readADC_Differential_2_3();
+  VT[4] = ads1015_3.readADC_Differential_2_3() * -1;
 #endif
 #if (NUMTHERM > 5)
-  Vals[5] = ads1115_3.readADC_Differential_0_1();
+  VT[5] = ads1015_3.readADC_Differential_0_1() * -1;
 #endif
-  
+#if (NUMTHERM > 6)
+  VT[6] = ads1015_4.readADC_Differential_0_1() * -1;
+#endif
+#if (NUMTHERM > 7)
+  VT[6] = ads1015_4.readADC_Differential_2_3() * -1;
+#endif
+
+#else   // no CHANNELFLIP
+
+  VT[0] = ads1015.readADC_Differential_0_1();
+#if (NUMTHERM > 1)
+  VT[1] = ads1015.readADC_Differential_2_3();
+#endif
+#if (NUMTHERM > 2)
+  VT[2] = ads1015_2.readADC_Differential_2_3();
+#endif
+#if (NUMTHERM > 3)
+  VT[3] = ads1015_2.readADC_Differential_0_1();
+#endif
+#if (NUMTHERM > 4)
+  VT[4] = ads1015_3.readADC_Differential_2_3();
+#endif
+#if (NUMTHERM > 5)
+  VT[5] = ads1015_3.readADC_Differential_0_1();
+#endif
+#if (NUMTHERM > 6)
+  VT[6] = ads1015_4.readADC_Differential_0_1();
+#endif
+#if (NUMTHERM > 7)
+  VT[6] = ads1015_4.readADC_Differential_2_3();
+#endif
+
+#endif // CHANNELFLIP
+
+  // Josiah
+  // Voltage Divider
+  // Vo = Vcc + R2 / (R1 + R2)
+  // R2 = - (Vo * R1) / (Vo - Vcc)
+
   for (int x = 0; x < n; x++) {
-    Vals[x] = ResistanceVals[x] * ((VCC / 2) / ((((float)Vals[x]) * multiplier) / 1000));
+    // From Josiah
+    float VTf = ((float)VT[x] * ADCMUL) / 1000; // 0.186 multiplier to mV, then divide by 1000mV/V
+    RT[x] = ( - (VTf * R1[x]) / ( VTf - VCC )); // Where VT is the Voltage across the Thermistor
+    //RT[x] = (R1[x] * ( (VCC/2) / ( ( (float)VT[x] * ADCMUL ) / 1000  ))); // to resistance
+    //RT[x] = R1[x] * ((4.92 / 2) / ((((float)VT[x]) * .186) / 1000));
+    //RT[x] = ((float)VT[x] * ADCMUL) / 1000 ;
   }
 }
 
@@ -217,7 +292,7 @@ boolean ShouldRun(float arr[], int n, float limit) {
   int count = 0;
   if (millis() < 25000) {
     //Serial.println("Time : " + String(millis()) + " : Waiting");
-    printArr(arr,n,millis());
+    printArr(arr, n, millis());
     Serial.print(" : Waiting");
     Serial.println();
     return true;
@@ -235,17 +310,17 @@ boolean ShouldRun(float arr[], int n, float limit) {
       }
     }
     float off[NUMTHERM];
-    for(int c = 0; c < n;c++){
+    for (int c = 0; c < n; c++) {
       off[c] = arr[c] - room[c];
     }
-    printArr(off,n,millis());
+    printArr(off, n, millis());
     Serial.println();
   }
   return true;
 }
 
 /* // Servo functions plunge(), Forward(), Backward()
-void plunge() {
+  void plunge() {
   Serial.println("Start Plunge");
   long t = millis();
   Serial.println(t);
@@ -256,9 +331,9 @@ void plunge() {
   }
   Backward(50, 125, 65);
   Serial.println(millis() - t);
-}
+  }
 
-void Forward(int s, int st, int en) {
+  void Forward(int s, int st, int en) {
   for (pos = st; pos <= en; pos += 1) { // goes from 0 degrees to 180 degrees
     // in steps of 1 degree
     TakeTemp();
@@ -266,16 +341,16 @@ void Forward(int s, int st, int en) {
     //myservo.write(pos);              // tell servo to go to position in variable 'pos'
     delay(s - 22);                     // waits 15ms for the servo to reach the position
   }
-}
+  }
 
-void Backward(int s, int st, int en) {
+  void Backward(int s, int st, int en) {
   for (pos = st; pos >= en; pos -= 1) { // goes from 180 degrees to 0 degrees
     TakeTemp();
     Serial.println();
     //myservo.write(pos);              // tell servo to go to position in variable 'pos'
     delay(s - 22);                     // waits 15ms for the servo to reach the position
   }
-}
+  }
 */
 
 void setColor(int red, int green, int blue, int ledNum)
@@ -305,8 +380,8 @@ void setColor(int red, int green, int blue, int ledNum)
 void TakeTemp() {
   long t = millis();
   //Serial.println(t);
-  long resistance[NUMTHERM];
-  GetResistance(resistance);
+  float resistance[NUMTHERM];
+  GetResistance(resistance, n, R1, multiplier);
   float temps[NUMTHERM];
   GetTemps(temps, NUMTHERM, resistance);
   printArr(temps, NUMTHERM, millis());
