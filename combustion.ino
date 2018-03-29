@@ -4,7 +4,7 @@
 #include <DRV8825.h>            // Stepper motor driver
 //#define MotorRelay 5
 
-
+#define STARTTIME 0
 
 // Motor steps per revolution. Most steppers are 200 steps or 1.8 degrees/step
 #define MOTOR_STEPS 3600 // we set this high for smoothing
@@ -43,6 +43,7 @@ BasicStepperDriver drivetrain(MOTOR_STEPS, DIR, STEP);
 #define NUMTHERM  1
 #define VCC       4.92
 #define ADCMUL    0.186
+
 // ADCs communicate over i2c (SCL and SDA)
 Adafruit_ADS1115 ads1115_1;
 #if (NUMTHERM > 2)
@@ -127,8 +128,11 @@ void setup(void)
   Serial.println("End Acceleration");
   //stop filling
   */
-  while(millis()<0){
+  while( millis() < STARTTIME ){
     TakeTemp();
+    Serial.println("Time : " + String(millis()) + " : Waiting");
+    printArr(arr, n, millis());
+    Serial.print(" : Waiting");
     Serial.println();
   }
   
@@ -151,7 +155,7 @@ void loop(void) {
   GetTemps(temps, NUMTHERM, resistance);
   if (ShouldRun(temps, 1000)) {
     //Run(1, 255, 5);
-    drivetrain.rotate(360);
+    drivetrain.rotate(360); // 4-inch wheels ~ 13 inches of travel per iteration.
   } else {
     /*
     for (int x = 100; x < 110; x = x + 2) {
@@ -161,7 +165,9 @@ void loop(void) {
     Run(1, 0, 10000);
     */
     Serial.println( "Motor disabled");
-    drivetrain.disable();
+    drivetrain.stop();
+    drivetrain.disable(); // no nEnable pin set in hardware, so setting enable pin is useless. 
+                          // nonetheless, this function can stay should we add it in the future.
     while (true) {
       ;
     }
@@ -177,6 +183,32 @@ void GetTemps(float *TempVals, int n, float *Res) {
     TempVals[y] = TempVals[y] - 273.15;
     TempVals[y] = (TempVals[y] * 9.0) / 5.0 + 32.0;
   }
+}
+
+boolean ShouldRun(float arr[], int n) { //, float limit) {
+  int count = 0;
+  if (millis() < STARTTIME) {
+    return true;
+  } else if (room[0] == 0) {
+    for (int i = 0; i < n; i++) {
+      room[i] = arr[i];
+    }
+  } else {
+    for (int x = 0; x < n; x++) {
+      if (arr[x] > 5.5 + room[x]) {
+        count++;
+        if (count > 2) {
+          return false;
+        }
+      }
+    }
+    float off[NUMTHERM];
+    for (int c = 0; c < n; c++) {
+      off[c] = arr[c] - room[c];
+    }
+    printArr(off, n, millis());
+  }
+  return true;
 }
 
 void GetResistance(float *RT, int n, int R1[], int adcmul) {
@@ -245,6 +277,19 @@ void GetResistance(float *RT, int n, int R1[], int adcmul) {
   }
 }
 
+void TakeTemp() {
+  //long t = millis();
+  //Serial.println(millis());
+  
+  float resistance[NUMTHERM];
+  GetResistance(resistance, NUMTHERM, ResistanceVals, multiplier);
+  float temps[NUMTHERM];
+  GetTemps(temps, NUMTHERM, resistance);
+  printArr(temps, NUMTHERM, millis());
+  
+  // Serial.println(millis()-t);    // Execution time of TakeTemp()
+}
+
 void printArr(long arr[], int n, long t) {
   Serial.print(t); Serial.print(" ");
   for (int x = 0; x < n; x++) {
@@ -304,36 +349,6 @@ void Run(int motor, int velocity, int t) {
 }
 */
 
-boolean ShouldRun(float arr[], int n) { //, float limit) {
-  int count = 0;
-  if (millis() < 0) {
-    Serial.println("Time : " + String(millis()) + " : Waiting");
-    printArr(arr, n, millis());
-    Serial.print(" : Waiting");
-    Serial.println();
-    return true;
-  } else if (room[0] == 0) {
-    for (int i = 0; i < n; i++) {
-      room[i] = arr[i];
-    }
-  } else {
-    for (int x = 0; x < n; x++) {
-      if (arr[x] > 5.5 + room[x]) {
-        count++;
-        if (count > 2) {
-          return false;
-        }
-      }
-    }
-    float off[NUMTHERM];
-    for (int c = 0; c < n; c++) {
-      off[c] = arr[c] - room[c];
-    }
-    printArr(off, n, millis());
-    Serial.println();
-  }
-  return true;
-}
 
 /* // Servo functions plunge(), Forward(), Backward()
   void plunge() {
@@ -393,13 +408,4 @@ void setColor(int red, int green, int blue, int ledNum)
   }
 }
 */
-void TakeTemp() {
-  long t = millis();
-  Serial.println(t);
-  float resistance[NUMTHERM];
-  GetResistance(resistance, NUMTHERM, ResistanceVals, multiplier);
-  float temps[NUMTHERM];
-  GetTemps(temps, NUMTHERM, resistance);
-  printArr(temps, NUMTHERM, millis());
-  // Serial.println(millis()-t);
-}
+
