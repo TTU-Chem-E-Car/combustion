@@ -36,7 +36,7 @@
 #define DIRDDIR LOW
 
 //DRV8825 drivetrain(MOTOR_STEPS, DIR, STEP, ENABLE, MODE0, MODE1, MODE2);
-DRV8825 drivetrain(MOTOR_STEPS, DIR, STEP);
+BasicStepperDriver drivetrain(MOTOR_STEPS, DIR, STEP);
 
 //Servo myservo;
 
@@ -138,7 +138,7 @@ void setup(void)
   TakeTemp();
   
   //drivetrain.setSpeedProfile(drivetrain.LINEAR_SPEED, MOTOR_ACCEL, MOTOR_DECEL);
-  //drivetrain.begin(RPM, MICROSTEPS);
+  drivetrain.begin(RPM, MICROSTEPS);
   //drivetrain.enable();
   //drivetrain.startRotate(360);
 }
@@ -151,6 +151,7 @@ void loop(void) {
   GetTemps(temps, NUMTHERM, resistance);
   if (ShouldRun(temps, 1000)) {
     //Run(1, 255, 5);
+    drivetrain.rotate(360);
   } else {
     /*
     for (int x = 100; x < 110; x = x + 2) {
