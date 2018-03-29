@@ -97,7 +97,9 @@ void setup(void)
   digitalWrite(DIRB,LOW);
   digitalWrite(DIRC,HIGH); // HI
   digitalWrite(DIRD,LOW);
-  
+
+#define TDELTA 5.5
+
   ads1115_1.begin();
   //ads1115_1.setSPS(ADS1115_DR_860SPS);
 #if (NUMTHERM > 2)
@@ -153,9 +155,9 @@ void loop(void) {
   GetResistance(resistance,NUMTHERM,ResistanceVals,ADCMUL);
   float temps[NUMTHERM];
   GetTemps(temps, NUMTHERM, resistance);
-  if (ShouldRun(temps, 1000)) {
+  if (ShouldRun(temps, 5, TDELTA)) {
     //Run(1, 255, 5);
-    drivetrain.rotate(360); // 4-inch wheels ~ 13 inches of travel per iteration.
+    drivetrain.rotate(120); // 4-inch wheels ~ 13 inches of travel per . rotation
   } else {
     /*
     for (int x = 100; x < 110; x = x + 2) {
@@ -185,7 +187,7 @@ void GetTemps(float *TempVals, int n, float *Res) {
   }
 }
 
-boolean ShouldRun(float arr[], int n) { //, float limit) {
+boolean ShouldRun(float arr[], int n, float limit) {
   int count = 0;
   if (millis() < STARTTIME) {
     return true;
@@ -195,7 +197,7 @@ boolean ShouldRun(float arr[], int n) { //, float limit) {
     }
   } else {
     for (int x = 0; x < n; x++) {
-      if (arr[x] > 5.5 + room[x]) {
+      if (arr[x] > limit + room[x]) {
         count++;
         if (count > 2) {
           return false;
