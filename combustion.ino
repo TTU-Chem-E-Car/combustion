@@ -59,7 +59,7 @@ float c2Arr[] = {  1.172333013E-04, 1.198489835E-04};
 float c3Arr[] = {  5.161206729E-07, 5.003643336E-07};
 
 float room[] = {0, 0, 0, 0, 0, 0, 0, 0};
-float   multiplier = 0.186;
+float multiplier = 0.186;
 
 int speakerpin = A7;
 
@@ -124,14 +124,16 @@ void setup(void)
 
     Serial.println("End Acceleration");
     //stop filling
+    */
     while(millis()<25000){
     TakeTemp();
     Serial.println();
     }
+    
     Serial.println("Filling Ended");
-    digitalWrite(MotorRelay, HIGH);
+    //digitalWrite(MotorRelay, HIGH);
+    
     TakeTemp();
-  */
   drivetrain.begin(RPM, MICROSTEPS);
   drivetrain.enable();
 }
