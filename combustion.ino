@@ -1,3 +1,4 @@
+#include <Arduino.h>
 #include <Wire.h>
 //#include <Servo.h>              // Used for plunging the 
 #include <Adafruit_ADS1015.h>   // Used as dual channel differential ADCs
@@ -5,9 +6,10 @@
 //#define MotorRelay 5
 
 #define STARTTIME 0
-
+#define PROBETIME 30000
+#define DQTIME 121000
 // Motor steps per revolution. Most steppers are 200 steps or 1.8 degrees/step
-#define MOTOR_STEPS 3600 // we set this high for smoothing
+#define MOTOR_STEPS 200 // we set this high for smoothing
 // Target RPM for cruise speed
 #define RPM 1
 // Acceleration and deceleration values are always in FULL steps / s^2
@@ -36,13 +38,16 @@
 #define DIRDDIR LOW
 
 //DRV8825 drivetrain(MOTOR_STEPS, DIR, STEP, ENABLE, MODE0, MODE1, MODE2);
-BasicStepperDriver drivetrain(MOTOR_STEPS, DIR, STEP);
+DRV8825 drivetrain(MOTOR_STEPS, DIR, STEP, ENABLE, MODE0, MODE1, MODE2);
+
+//BasicStepperDriver drivetrain(MOTOR_STEPS, DIR, STEP);
 
 //Servo myservo;
 
 #define NUMTHERM  1
 #define VCC       4.92
 #define ADCMUL    0.186
+#define TDELTA 3.0
 
 // ADCs communicate over i2c (SCL and SDA)
 Adafruit_ADS1115 ads1115_1;
@@ -90,15 +95,6 @@ void setup(void)
   pinMode(DIRB, OUTPUT);
   pinMode(DIRC, OUTPUT);
   pinMode(DIRD, OUTPUT);
-  
-  digitalWrite(SLEEP,HIGH);
-  digitalWrite(RESET,HIGH);
-  digitalWrite(DIRA,LOW);
-  digitalWrite(DIRB,LOW);
-  digitalWrite(DIRC,HIGH); // HI
-  digitalWrite(DIRD,LOW);
-
-#define TDELTA 5.5
 
   ads1115_1.begin();
   //ads1115_1.setSPS(ADS1115_DR_860SPS);
@@ -133,7 +129,7 @@ void setup(void)
   while( millis() < STARTTIME ){
     TakeTemp();
     Serial.println("Time : " + String(millis()) + " : Waiting");
-    printArr(arr, n, millis());
+    //printArr(arr, n, millis());
     Serial.print(" : Waiting");
     Serial.println();
   }
@@ -143,13 +139,21 @@ void setup(void)
   
   TakeTemp();
   
-  //drivetrain.setSpeedProfile(drivetrain.LINEAR_SPEED, MOTOR_ACCEL, MOTOR_DECEL);
   drivetrain.begin(RPM, MICROSTEPS);
-  //drivetrain.enable();
-  //drivetrain.startRotate(360);
+  drivetrain.enable();
+  drivetrain.setSpeedProfile(drivetrain.LINEAR_SPEED, MOTOR_ACCEL, MOTOR_DECEL);
+  
+  digitalWrite(RESET,HIGH);
+  digitalWrite(SLEEP,HIGH);
+  digitalWrite(DIRD,LOW); 
+  digitalWrite(DIRA,LOW);
+  digitalWrite(DIRB,LOW);
+  digitalWrite(DIRC,HIGH); 
+  //drivetrain.startRotate(120);
 }
 
 void loop(void) {
+  Serial.println("startloop");
   unsigned wait_time = drivetrain.nextAction();
   float resistance[NUMTHERM];
   GetResistance(resistance,NUMTHERM,ResistanceVals,ADCMUL);
@@ -157,7 +161,11 @@ void loop(void) {
   GetTemps(temps, NUMTHERM, resistance);
   if (ShouldRun(temps, 5, TDELTA)) {
     //Run(1, 255, 5);
-    drivetrain.rotate(120); // 4-inch wheels ~ 13 inches of travel per . rotation
+    if (wait_time) {
+      //drivetrain.rotate(120); // 4-inch wheels ~ 13 inches of travel per . rotation
+    } else {
+      drivetrain.rotate(20);
+    }
   } else {
     /*
     for (int x = 100; x < 110; x = x + 2) {
@@ -170,6 +178,7 @@ void loop(void) {
     drivetrain.stop();
     drivetrain.disable(); // no nEnable pin set in hardware, so setting enable pin is useless. 
                           // nonetheless, this function can stay should we add it in the future.
+    delay(2000); digitalWrite(SLEEP,LOW);
     while (true) {
       ;
     }
@@ -188,28 +197,32 @@ void GetTemps(float *TempVals, int n, float *Res) {
 }
 
 boolean ShouldRun(float arr[], int n, float limit) {
+  Serial.println("Shouldrun");
   int count = 0;
-  if (millis() < STARTTIME) {
-    return true;
+  if (millis() < PROBETIME) {
+    Serial.println("WAITING");
   } else if (room[0] == 0) {
     for (int i = 0; i < n; i++) {
       room[i] = arr[i];
     }
+    Serial.println("Filled: "+String(arr[0]));
+  } else if ( millis() > DQTIME ) {
+    return false;
   } else {
-    for (int x = 0; x < n; x++) {
-      if (arr[x] > limit + room[x]) {
-        count++;
-        if (count > 2) {
+      if (arr[0] > limit + room[0]) {
+          Serial.println("Done Shouldrun");
           return false;
-        }
-      }
+      }else{
+        Serial.println(String(arr[0]-room[0]));
     }
-    float off[NUMTHERM];
-    for (int c = 0; c < n; c++) {
-      off[c] = arr[c] - room[c];
-    }
-    printArr(off, n, millis());
+    //float off[NUMTHERM];
+    //for (int c = 0; c < n; c++) {
+      //off[c] = arr[c] - room[c];
+    //}
+   // Serial.println("");
+   // printArr(off, n, millis());
   }
+ // Serial.println("Done Shouldrun");
   return true;
 }
 
@@ -287,22 +300,22 @@ void TakeTemp() {
   GetResistance(resistance, NUMTHERM, ResistanceVals, multiplier);
   float temps[NUMTHERM];
   GetTemps(temps, NUMTHERM, resistance);
-  printArr(temps, NUMTHERM, millis());
+  //printArr(temps, NUMTHERM, millis());
   
   // Serial.println(millis()-t);    // Execution time of TakeTemp()
 }
 
 void printArr(long arr[], int n, long t) {
-  Serial.print(t); Serial.print(" ");
-  for (int x = 0; x < n; x++) {
+  Serial.print(t); Serial.print("\t printArr \t");
+  for (int x = 0; x < NUMTHERM; x++) {
     Serial.print(arr[x]); Serial.print(" ");
   }
   Serial.println(" ");
 }
 
 void printArr(float arr[], int n, long t) {
-  Serial.print(t); Serial.print(" ");
-  for (int x = 0; x < n; x++) {
+  Serial.print(t); Serial.print("\r printArr \r");
+  for (int x = 0; x < NUMTHERM; x++) {
     Serial.print(arr[x], 4); Serial.print(" ");
   }
   Serial.println(" ");
